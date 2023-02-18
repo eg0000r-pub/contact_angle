@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/env python3
 # Contact angle calculation program by Egor Demidov
 
 # DEPENDENCIES:
