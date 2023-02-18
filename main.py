@@ -6,13 +6,7 @@
 # - numpy
 # - pillow
 
-# INSTRUCTIONS:
-# (1) Select an image file when prompted in the file dialog
-# (2) Use the toolbar to zoom in on the droplet as needed
-# (3) Right-click on the origin (corner of the droplet)
-# (4) Right-click on the opposite corner of the droplet
-# (5) Right-click on a point on a line tangent to the surface (close to the origin)
-# Calculated contact angle will be displayed in the plot title and printed to stdout
+# KNOWN ISSUE: only works for contact angles less than 90
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,16 +21,35 @@ img = np.asarray(Image.open(file_path))
 
 fig, ax = plt.subplots()
 ax.imshow(img)
-plt.title('Select origin (right-click)')
+plt.title('Select one corner (right-click)')
 
 xs = []
 ys = []
 
-# # x^2 + y^2 + 2gx + 2fy + c = 0
-# def find_circle(xs, ys):
-#
 
-# First point is the corner
+# Circle: x^2 + y^2 + 2gx + 2fy + c = 0
+# where center (h, k) is (-g, -f) and radius is r^2 = h^2 + k^2 - c
+# Rewrite as: 2x*g + 2y*f + 1*c = -x^2 - y^2
+# Returns center and radius
+def solve_circle(xs, ys):
+    A = np.array([
+        [2*xs[0], 2*ys[0], 1],
+        [2*xs[1], 2*ys[1], 1],
+        [2*xs[2], 2*ys[2], 1]
+    ])
+    B = np.array([
+        [-xs[0]**2-ys[0]**2],
+        [-xs[1]**2-ys[1]**2],
+        [-xs[2]**2-ys[2]**2],
+    ])
+    sol = np.matmul(np.linalg.inv(A), B)
+    h = -sol[0]
+    k = -sol[1]
+    c = sol[2]
+    r = np.sqrt(h**2 + k**2 - c)
+    return np.array([h, k]), r
+
+
 def onclick(event):
     if event.button == 3:
         ax.scatter(event.xdata, event.ydata, color='r')
@@ -44,19 +57,27 @@ def onclick(event):
         ys.append(event.ydata)
 
         if len(xs) == 1:
-            plt.title('Select first vector (right-click)')
+            plt.title('Select second corner (right-click)')
         elif len(xs) == 2:
             ax.plot([xs[0], xs[1]], [ys[0], ys[1]], 'r')
-            plt.title('Select second vector (right-click)')
+            plt.title('Select a point on the circle (right-click)')
         elif len(xs) == 3:
-            ax.plot([xs[0], xs[2]], [ys[0], ys[2]], 'r')
-            vec1 = np.array([xs[1] - xs[0], ys[1] - ys[0]])
-            vec2 = np.array([xs[2] - xs[0], ys[2] - ys[0]])
-            cos_theta = np.dot(vec1, vec2) / np.linalg.norm(vec1) / np.linalg.norm(vec2)
-            print(f'Contact angle: {np.arccos(cos_theta) * 180 / np.pi:.2f} deg')
-            plt.title(f'$\\theta={np.arccos(cos_theta) * 180 / np.pi:.2f}^\\circ$')
+            center, r = solve_circle(xs, ys)
+            t = np.arange(0, 2*np.pi, 0.01)
+            xc = r*np.cos(t)+center[0]
+            yc = r*np.sin(t)+center[1]
+            ax.plot(xc, yc, 'r')
+            slope = ((center[0]-xs[0])/(ys[0]-center[1]))[0]  # dy/dx = (h-x)/(y-k)
+            ax.plot([xs[0], xs[1]], [ys[0], ys[0]+slope*(xs[1]-xs[0])], 'r')
+            vec1 = np.array([xs[1]-xs[0], ys[1]-ys[0]])
+            vec2 = np.array([xs[1]-xs[0], slope*(xs[1]-xs[0])])
+            cos_theta = np.dot(vec1, vec2)/np.linalg.norm(vec1)/np.linalg.norm(vec2)
+            theta = np.arccos(cos_theta)*180/np.pi
+            print(f'Contact angle: {theta:.2f} deg')
+            plt.title(f'$\\theta={theta:.2f}^\\circ$')
 
         plt.draw()
 
-cid = fig.canvas.mpl_connect('button_press_event', onclick)
+
+fig.canvas.mpl_connect('button_press_event', onclick)
 plt.show()
